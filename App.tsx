@@ -12,12 +12,53 @@ import {
   XCircle,
   Lock,
   Menu,
-  Sparkles
+  Sparkles,
+  Copy
 } from 'lucide-react';
 import { User, WithdrawalRequest, ADMIN_PASSWORD } from './types';
 import { getUsers, saveUsers, getWithdrawals, saveWithdrawals, getCurrentUserId, setCurrentUserId } from './services/storage';
 
+// --- Sound Helper ---
+const playClickSound = () => {
+  try {
+    const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContext) return;
+    
+    const audioContext = new AudioContext();
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+
+    // Create a softer "pop" sound
+    oscillator.type = 'sine';
+    
+    // Quick frequency drop for a "bubble" effect
+    oscillator.frequency.setValueAtTime(600, audioContext.currentTime);
+    oscillator.frequency.exponentialRampToValueAtTime(100, audioContext.currentTime + 0.15);
+    
+    // Smooth envelope with higher volume
+    gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+    gainNode.gain.linearRampToValueAtTime(0.5, audioContext.currentTime + 0.02); // Increased from 0.15 to 0.5
+    gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.15); // Decay
+
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+
+    oscillator.start();
+    oscillator.stop(audioContext.currentTime + 0.15);
+  } catch (e) {
+    console.error("Audio play failed", e);
+  }
+};
+
 // --- Helper Components ---
+
+const AdPlaceholder = () => (
+  <div className="w-full h-24 bg-slate-800/50 rounded-xl border border-dashed border-slate-700 flex flex-col items-center justify-center my-6 relative overflow-hidden group">
+    <p className="text-xs text-slate-500 uppercase tracking-widest z-10">Advertisement Space</p>
+    <p className="text-[10px] text-slate-600 z-10 mt-1">Google AdSense / Custom Ad</p>
+    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -skew-x-12 group-hover:animate-pulse" />
+  </div>
+);
 
 const Button = ({ children, onClick, variant = 'primary', className = '', disabled = false }: any) => {
   const baseStyle = "px-4 py-3 rounded-xl font-semibold transition-all duration-300 transform active:scale-95 flex items-center justify-center gap-2 shadow-lg";
@@ -28,9 +69,14 @@ const Button = ({ children, onClick, variant = 'primary', className = '', disabl
     secondary: "bg-slate-800 text-slate-300 hover:bg-slate-700"
   };
   
+  const handleClick = (e: any) => {
+    playClickSound();
+    if (onClick) onClick(e);
+  };
+  
   return (
     <button 
-      onClick={onClick} 
+      onClick={handleClick} 
       disabled={disabled}
       className={`${baseStyle} ${variants[variant as keyof typeof variants]} ${disabled ? 'opacity-50 cursor-not-allowed' : ''} ${className}`}
     >
@@ -77,8 +123,24 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [activeTab, setActiveTab] = useState<'home' | 'withdraw' | 'profile' | 'admin'>('home');
   const [isLoading, setIsLoading] = useState(true);
+  const [incomingReferralCode, setIncomingReferralCode] = useState<string | null>(null);
+  const [cooldown, setCooldown] = useState(0);
 
-  // Load user on mount
+  // Global cooldown timer
+  useEffect(() => {
+    let timer: any;
+    if (cooldown > 0) {
+      timer = setInterval(() => {
+        setCooldown((prev) => {
+          if (prev <= 1) return 0;
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [cooldown]);
+
+  // Load user on mount and check referral
   useEffect(() => {
     const userId = getCurrentUserId();
     if (userId) {
@@ -90,6 +152,12 @@ export default function App() {
         setCurrentUserId(null);
       }
     }
+    
+    // Check for referral code in URL
+    const params = new URLSearchParams(window.location.search);
+    const ref = params.get('ref');
+    if (ref) setIncomingReferralCode(ref);
+
     setIsLoading(false);
   }, []);
 
@@ -98,18 +166,36 @@ export default function App() {
     let user = users.find(u => u.username === username);
     
     if (!user) {
+      // Check for valid referrer
+      let referrer = null;
+      if (incomingReferralCode) {
+        referrer = users.find(u => u.referralCode === incomingReferralCode);
+      }
+
       // Create new user
       user = {
         id: Date.now().toString(),
         username,
-        balance: 0,
+        balance: referrer ? 5 : 0, // Bonus 5 if referred
         referralCode: Math.random().toString(36).substring(2, 8).toUpperCase(),
-        referredBy: null,
+        referredBy: referrer ? incomingReferralCode : null,
         referralCount: 0,
         withdrawalCount: 0,
         isBanned: false,
         joinedAt: new Date().toISOString()
       };
+      
+      // Update referrer count if exists
+      if (referrer) {
+         const referrerIndex = users.findIndex(u => u.id === referrer!.id);
+         if (referrerIndex !== -1) {
+             users[referrerIndex] = {
+                 ...users[referrerIndex],
+                 referralCount: users[referrerIndex].referralCount + 1
+             };
+         }
+      }
+
       users.push(user);
       saveUsers(users);
     }
@@ -167,7 +253,14 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="pt-24 px-6 max-w-md mx-auto">
-        {activeTab === 'home' && <HomeScreen user={currentUser} onUpdateBalance={updateBalance} />}
+        {activeTab === 'home' && (
+          <HomeScreen 
+            user={currentUser} 
+            onUpdateBalance={updateBalance} 
+            cooldown={cooldown}
+            setCooldown={setCooldown}
+          />
+        )}
         {activeTab === 'withdraw' && <WithdrawScreen user={currentUser} onUpdateUser={setCurrentUser} />}
         {activeTab === 'profile' && <ProfileScreen user={currentUser} onLogout={handleLogout} onAdminAccess={() => setActiveTab('admin')} />}
         {activeTab === 'admin' && <AdminScreen user={currentUser} onExit={() => setActiveTab('profile')} />}
@@ -195,7 +288,13 @@ export default function App() {
 }
 
 const NavButton = ({ icon, label, active, onClick }: any) => (
-  <button onClick={onClick} className={`flex flex-col items-center gap-1 transition-colors ${active ? 'text-cyan-400' : 'text-slate-500'}`}>
+  <button 
+    onClick={(e) => {
+      playClickSound();
+      if (onClick) onClick(e);
+    }} 
+    className={`flex flex-col items-center gap-1 transition-colors ${active ? 'text-cyan-400' : 'text-slate-500'}`}
+  >
     {React.cloneElement(icon, { size: 24 })}
     <span className="text-[10px] font-medium tracking-wide">{label}</span>
   </button>
@@ -233,36 +332,28 @@ const AuthScreen = ({ onLogin }: { onLogin: (username: string) => void }) => {
 
 // --- Home Screen (Scratch Cards) ---
 
-const HomeScreen = ({ user, onUpdateBalance }: { user: User, onUpdateBalance: (amount: number) => void }) => {
+const HomeScreen = ({ user, onUpdateBalance, cooldown, setCooldown }: { user: User, onUpdateBalance: (amount: number) => void, cooldown: number, setCooldown: (val: number) => void }) => {
   const [isScratching, setIsScratching] = useState(false);
   const [scratchedValue, setScratchedValue] = useState<number | null>(null);
-  const [cooldown, setCooldown] = useState(0);
 
+  // Reset scratched value when cooldown ends
   useEffect(() => {
-    let timer: any;
-    if (cooldown > 0) {
-      timer = setInterval(() => {
-        setCooldown((prev) => {
-          if (prev <= 1) {
-            setScratchedValue(null);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
+    if (cooldown === 0) {
+      setScratchedValue(null);
     }
-    return () => clearInterval(timer);
   }, [cooldown]);
 
   const handleScratch = () => {
     if (isScratching || scratchedValue !== null || cooldown > 0) return;
     
+    playClickSound(); // Sound on scratch start
     setIsScratching(true);
     // Simulate API/Random logic
     setTimeout(() => {
       const reward = 1; // Fixed 1 tk
       setScratchedValue(reward);
       onUpdateBalance(reward);
+      playClickSound(); // Sound on reveal
       setCooldown(30);
       setIsScratching(false);
     }, 1500);
@@ -295,6 +386,8 @@ const HomeScreen = ({ user, onUpdateBalance }: { user: User, onUpdateBalance: (a
            </div>
         )}
       </div>
+
+      <AdPlaceholder />
     </div>
   );
 };
@@ -452,7 +545,6 @@ const ProfileScreen = ({ user, onLogout, onAdminAccess }: any) => {
           />
         </div>
         <h2 className="text-2xl font-bold mt-3">{user.username}</h2>
-        <p className="text-cyan-400 font-mono tracking-wider">CODE: {user.referralCode}</p>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
@@ -466,22 +558,28 @@ const ProfileScreen = ({ user, onLogout, onAdminAccess }: any) => {
         </div>
       </div>
 
-      {!user.referredBy && (
-        <div className="glass-card p-6 rounded-3xl border-dashed border-2 border-slate-700">
-          <h3 className="text-sm font-bold mb-3 text-slate-300">Have a referral code?</h3>
-          <div className="flex gap-2">
-            <input 
-              value={referralInput}
-              onChange={(e) => setReferralInput(e.target.value)}
-              placeholder="Enter code"
-              className="flex-1 bg-black/40 border border-slate-700 rounded-lg px-3 text-sm focus:outline-none focus:border-cyan-500"
-            />
-            <Button onClick={handleClaimReferral} variant="secondary" className="py-2 text-sm">
-              Claim ৳5
-            </Button>
+      <div className="glass-card p-6 rounded-3xl border-dashed border-2 border-slate-700 text-center">
+        <h3 className="text-sm font-bold mb-3 text-slate-300">Invite Friends & Earn</h3>
+        <p className="text-xs text-slate-400 mb-4">Share your link to earn rewards</p>
+        <div className="flex flex-col gap-2">
+          <div className="bg-black/40 p-3 rounded-lg text-xs text-slate-400 break-all font-mono border border-slate-800">
+            {`${window.location.origin}?ref=${user.referralCode}`}
           </div>
+          <Button 
+            onClick={() => {
+              const link = `${window.location.origin}?ref=${user.referralCode}`;
+              navigator.clipboard.writeText(link);
+              alert("Referral link copied!");
+            }} 
+            variant="primary" 
+            className="w-full py-2 text-sm"
+          >
+            <Copy className="w-4 h-4" /> Copy Referral Link
+          </Button>
         </div>
-      )}
+      </div>
+      
+      <AdPlaceholder />
     </div>
   );
 };
