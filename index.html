@@ -3,12 +3,55 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Ad Bank</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <title>Ad Bank v2.1</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
+      // Force unregister any existing service workers
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+          for(let registration of registrations) {
+            registration.unregister();
+            console.log('ServiceWorker unregistered');
+          }
+        });
+      }
+
+      // Version check to force reload
+      const CURRENT_VERSION = '5.1';
+      console.log('Current App Version:', CURRENT_VERSION);
+      const storedVersion = localStorage.getItem('app_version');
+      if (storedVersion !== CURRENT_VERSION) {
+        localStorage.setItem('app_version', CURRENT_VERSION);
+        // Only reload if there was a previous version stored to avoid infinite loop on first visit
+        if (storedVersion) {
+           console.log('New version detected, reloading...');
+           window.location.reload(true);
+        }
+      }
+      
+      // Fallback error if app doesn't load
+      setTimeout(() => {
+        const root = document.getElementById('root');
+        if (!root || root.innerHTML.trim() === '') {
+          document.getElementById('loading-screen').innerHTML = `
+            <div style="text-align: center; padding: 20px;">
+              <h2 style="color: #ff4444;">Deployment Error</h2>
+              <p>The application failed to start.</p>
+              <p style="font-size: 12px; color: #aaa;">
+                If you see this, the site is likely serving the source code instead of the built app.<br>
+                Please ensure GitHub Actions is enabled and the build workflow succeeded.
+              </p>
+            </div>
+          `;
+        }
+      }, 5000);
+
       tailwind.config = {
         theme: {
           extend: {
@@ -31,35 +74,126 @@
     </script>
     <style>
       body {
-        background-color: #050505;
+        background-color: #0a0a0a; /* Professional Dark Background */
         color: #ffffff;
+        margin: 0;
+        font-family: sans-serif;
       }
-      .glass {
-        background: rgba(20, 30, 40, 0.6);
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
-        border: 1px solid rgba(6, 182, 212, 0.1);
+      #root {
+        width: 100%;
+        height: 100vh;
       }
-      .glass-card {
-        background: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.01) 100%);
-        backdrop-filter: blur(10px);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+      #loading-screen {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: #0a0a0a; /* Professional Dark Background */
+        color: #ffffff;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 10000;
+        font-size: 24px;
+        font-weight: bold;
+        transition: opacity 0.5s ease-out;
+      }
+      #error-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(50, 0, 0, 0.95);
+        color: #ff0000;
+        z-index: 20000;
+        padding: 20px;
+        overflow: auto;
+        display: none;
+        font-family: monospace;
+        white-space: pre-wrap;
+        font-size: 16px;
       }
     </style>
-  <script type="importmap">
-{
-  "imports": {
-    "react/": "https://esm.sh/react@^19.2.3/",
-    "react": "https://esm.sh/react@^19.2.3",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "lucide-react": "https://esm.sh/lucide-react@^0.562.0"
-  }
-}
-</script>
-<link rel="stylesheet" href="/index.css">
+    <link rel="stylesheet" href="/index.css">
+    <script>
+      window.onerror = function(message, source, lineno, colno, error) {
+        var overlay = document.getElementById('error-overlay');
+        var loading = document.getElementById('loading-screen');
+        if (overlay) {
+          overlay.style.display = 'block';
+          if (loading) loading.style.display = 'none';
+          var errText = 'Error: ' + message + '\nAt: ' + source + ':' + lineno + ':' + colno;
+          if (error && error.stack) {
+            errText += '\n\nStack:\n' + error.stack;
+          }
+          var div = document.createElement('div');
+          div.textContent = errText;
+          div.style.borderBottom = '1px solid #ff4444';
+          div.style.paddingBottom = '10px';
+          div.style.marginBottom = '10px';
+          overlay.appendChild(div);
+        }
+      };
+      window.addEventListener('unhandledrejection', function(event) {
+        var overlay = document.getElementById('error-overlay');
+        var loading = document.getElementById('loading-screen');
+        if (overlay) {
+          overlay.style.display = 'block';
+          if (loading) loading.style.display = 'none';
+          var div = document.createElement('div');
+          div.textContent = 'Unhandled Promise Rejection: ' + event.reason;
+          div.style.borderBottom = '1px solid #ff4444';
+          div.style.paddingBottom = '10px';
+          div.style.marginBottom = '10px';
+          overlay.appendChild(div);
+        }
+      });
+      
+      // Safety timeout
+      setTimeout(function() {
+        var root = document.getElementById('root');
+        var loading = document.getElementById('loading-screen');
+        if (root && root.childElementCount === 0 && loading && loading.style.display !== 'none') {
+           // React hasn't taken over yet
+           var overlay = document.getElementById('error-overlay');
+           if (overlay) {
+             overlay.style.display = 'block';
+             loading.style.display = 'none';
+             var div = document.createElement('div');
+             div.textContent = 'Timeout: React app failed to mount within 5 seconds. Check console for errors.';
+             div.style.color = 'red';
+             div.style.backgroundColor = 'white';
+             div.style.padding = '20px';
+             overlay.appendChild(div);
+           }
+        }
+      }, 5000);
+    </script>
 </head>
   <body>
+    <div id="error-overlay">
+      <h1>Application Error</h1>
+      <button onclick="window.location.reload()" style="padding: 10px 20px; background: #fff; color: #000; border: none; border-radius: 5px; cursor: pointer; margin-bottom: 20px;">Reload Page</button>
+    </div>
+    <div id="loading-screen">
+      <div style="margin-bottom: 20px;">
+        <svg class="animate-spin h-10 w-10 text-black" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+      </div>
+      <div style="font-size: 24px; font-weight: bold; margin-bottom: 10px; color: white;">Ad Bank v5.2 (FINAL)</div>
+      <div style="font-size: 14px; color: #aaa;">Loading... If stuck, check GitHub Settings > Pages > Source = GitHub Actions</div>
+      <div style="margin-top: 20px; font-size: 12px; color: #666;">
+        If stuck, please clear browser cache.
+      </div>
+      <button onclick="window.location.reload(true)" style="margin-top: 20px; padding: 8px 16px; background: #eee; color: #000; border: 1px solid #ccc; border-radius: 4px; cursor: pointer;">
+        Force Reload
+      </button>
+    </div>
     <div id="root"></div>
   <script type="module" src="/index.tsx"></script>
 </body>

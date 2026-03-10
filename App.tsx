@@ -13,7 +13,11 @@ import {
   Lock,
   Menu,
   Sparkles,
-  Copy
+  Copy,
+  ArrowLeft,
+  Share2,
+  Facebook,
+  MessageCircle
 } from 'lucide-react';
 import { User, WithdrawalRequest, ADMIN_PASSWORD } from './types';
 import { getUsers, saveUsers, getWithdrawals, saveWithdrawals, getCurrentUserId, setCurrentUserId } from './services/storage';
@@ -121,7 +125,7 @@ const Particles = () => {
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [activeTab, setActiveTab] = useState<'home' | 'withdraw' | 'profile' | 'admin'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'withdraw' | 'profile' | 'admin' | 'privacy' | 'terms'>('home');
   const [isLoading, setIsLoading] = useState(true);
   const [incomingReferralCode, setIncomingReferralCode] = useState<string | null>(null);
   const [cooldown, setCooldown] = useState(0);
@@ -161,6 +165,11 @@ export default function App() {
     setIsLoading(false);
   }, []);
 
+  // Expose setActiveTab for deep links
+  useEffect(() => {
+    (window as any).setTab = setActiveTab;
+  }, []);
+
   const handleLogin = (username: string) => {
     const users = getUsers();
     let user = users.find(u => u.username === username);
@@ -176,7 +185,7 @@ export default function App() {
       user = {
         id: Date.now().toString(),
         username,
-        balance: referrer ? 5 : 0, // Bonus 5 if referred
+        balance: 10, // Sign-up Bonus 10 taka for everyone
         referralCode: Math.random().toString(36).substring(2, 8).toUpperCase(),
         referredBy: referrer ? incomingReferralCode : null,
         referralCount: 0,
@@ -191,7 +200,8 @@ export default function App() {
          if (referrerIndex !== -1) {
              users[referrerIndex] = {
                  ...users[referrerIndex],
-                 referralCount: users[referrerIndex].referralCount + 1
+                 referralCount: users[referrerIndex].referralCount + 1,
+                 balance: users[referrerIndex].balance + 10 // Add 10 taka bonus to referrer
              };
          }
       }
@@ -264,10 +274,12 @@ export default function App() {
         {activeTab === 'withdraw' && <WithdrawScreen user={currentUser} onUpdateUser={setCurrentUser} />}
         {activeTab === 'profile' && <ProfileScreen user={currentUser} onLogout={handleLogout} onAdminAccess={() => setActiveTab('admin')} />}
         {activeTab === 'admin' && <AdminScreen user={currentUser} onExit={() => setActiveTab('profile')} />}
+        {activeTab === 'privacy' && <PrivacyScreen onBack={() => setActiveTab('profile')} />}
+        {activeTab === 'terms' && <TermsScreen onBack={() => setActiveTab('profile')} />}
       </main>
 
       {/* Bottom Navigation */}
-      {activeTab !== 'admin' && (
+      {['home', 'withdraw', 'profile'].includes(activeTab) && (
         <nav className="fixed bottom-0 left-0 right-0 glass px-6 py-4 z-50 rounded-t-3xl border-t border-cyan-500/20">
           <div className="flex justify-around items-center max-w-md mx-auto">
             <NavButton icon={<Home />} label="Home" active={activeTab === 'home'} onClick={() => setActiveTab('home')} />
@@ -330,6 +342,46 @@ const AuthScreen = ({ onLogin }: { onLogin: (username: string) => void }) => {
   );
 };
 
+// --- Static Pages ---
+
+const PrivacyScreen = ({ onBack }: { onBack: () => void }) => (
+  <div className="space-y-6 pb-20">
+    <div className="flex items-center gap-4">
+      <Button onClick={onBack} variant="secondary" className="p-2 rounded-full"><ArrowLeft className="w-5 h-5" /></Button>
+      <h2 className="text-xl font-bold">Privacy Policy</h2>
+    </div>
+    <div className="glass-card p-6 rounded-3xl space-y-4 text-sm text-slate-300">
+      <p><strong>Last Updated:</strong> {new Date().toLocaleDateString()}</p>
+      <p>Your privacy is important to us. It is Ad Bank's policy to respect your privacy regarding any information we may collect from you across our website and other sites we own and operate.</p>
+      <h3 className="font-bold text-white mt-4">1. Information We Collect</h3>
+      <p>We only ask for personal information when we truly need it to provide a service to you. We collect it by fair and lawful means, with your knowledge and consent.</p>
+      <h3 className="font-bold text-white mt-4">2. How We Use Information</h3>
+      <p>We use the collected data to manage your account, process withdrawals, and improve our services. We do not share any personally identifying information publicly or with third-parties, except when required to by law.</p>
+      <h3 className="font-bold text-white mt-4">3. Cookies</h3>
+      <p>We use cookies to store your preferences and settings. You are free to refuse our request for your personal information, with the understanding that we may be unable to provide you with some of your desired services.</p>
+    </div>
+  </div>
+);
+
+const TermsScreen = ({ onBack }: { onBack: () => void }) => (
+  <div className="space-y-6 pb-20">
+    <div className="flex items-center gap-4">
+      <Button onClick={onBack} variant="secondary" className="p-2 rounded-full"><ArrowLeft className="w-5 h-5" /></Button>
+      <h2 className="text-xl font-bold">Terms of Service</h2>
+    </div>
+    <div className="glass-card p-6 rounded-3xl space-y-4 text-sm text-slate-300">
+      <h3 className="font-bold text-white">1. Terms</h3>
+      <p>By accessing Ad Bank, you agree to be bound by these terms of service, all applicable laws and regulations, and agree that you are responsible for compliance with any applicable local laws.</p>
+      <h3 className="font-bold text-white mt-4">2. Use License</h3>
+      <p>Permission is granted to temporarily download one copy of the materials (information or software) on Ad Bank's website for personal, non-commercial transitory viewing only.</p>
+      <h3 className="font-bold text-white mt-4">3. Disclaimer</h3>
+      <p>The materials on Ad Bank's website are provided on an 'as is' basis. Ad Bank makes no warranties, expressed or implied, and hereby disclaims and negates all other warranties including, without limitation, implied warranties or conditions of merchantability.</p>
+      <h3 className="font-bold text-white mt-4">4. Limitations</h3>
+      <p>In no event shall Ad Bank or its suppliers be liable for any damages (including, without limitation, damages for loss of data or profit, or due to business interruption) arising out of the use or inability to use the materials on Ad Bank's website.</p>
+    </div>
+  </div>
+);
+
 // --- Home Screen (Scratch Cards) ---
 
 const HomeScreen = ({ user, onUpdateBalance, cooldown, setCooldown }: { user: User, onUpdateBalance: (amount: number) => void, cooldown: number, setCooldown: (val: number) => void }) => {
@@ -374,7 +426,7 @@ const HomeScreen = ({ user, onUpdateBalance, cooldown, setCooldown }: { user: Us
               <div className={`absolute inset-0 bg-gradient-to-br from-cyan-600 to-blue-700 transition-opacity duration-700 ${isScratching ? 'opacity-0' : 'opacity-100'}`} />
               <div className="relative z-10 flex flex-col items-center">
                 <Sparkles className={`w-10 h-10 text-white mb-2 ${isScratching ? 'animate-spin' : 'animate-pulse'}`} />
-                <p className="font-bold text-lg">{isScratching ? 'Revealing...' : 'Tap to Scratch'}</p>
+                <p className="font-bold text-lg">{isScratching ? 'Revealing...' : 'ক্লিক করুন'}</p>
               </div>
             </>
           )}
@@ -385,6 +437,33 @@ const HomeScreen = ({ user, onUpdateBalance, cooldown, setCooldown }: { user: Us
              Next scratch in {cooldown}s
            </div>
         )}
+      </div>
+
+      <div className="glass-card p-6 rounded-3xl space-y-4">
+        <h3 className="font-bold text-lg text-white">How to Earn?</h3>
+        <div className="space-y-3 text-sm text-slate-400">
+          <div className="flex gap-3">
+            <div className="w-8 h-8 rounded-full bg-cyan-500/20 flex items-center justify-center text-cyan-400 font-bold shrink-0">1</div>
+            <div>
+              <p className="text-white font-semibold">ক্লিক করুন (Scratch)</p>
+              <p>প্রতি ৩০ সেকেন্ড পর পর বক্সে ক্লিক করে জিতে নিন নিশ্চিত টাকা।</p>
+            </div>
+          </div>
+          <div className="flex gap-3">
+            <div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center text-purple-400 font-bold shrink-0">2</div>
+            <div>
+              <p className="text-white font-semibold">Invite Friends</p>
+              <p>আপনার রেফারেল লিংক শেয়ার করুন। প্রতি সফল রেফারে পাবেন ৳১০ বোনাস!</p>
+            </div>
+          </div>
+          <div className="flex gap-3">
+            <div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center text-green-400 font-bold shrink-0">3</div>
+            <div>
+              <p className="text-white font-semibold">Withdraw Money</p>
+              <p>মিনিমাম ব্যালেন্স (৳২০) হলে সরাসরি বিকাশ, নগদ বা রকেটে টাকা তুলে নিন।</p>
+            </div>
+          </div>
+        </div>
       </div>
 
       <AdPlaceholder />
@@ -408,8 +487,8 @@ const WithdrawScreen = ({ user, onUpdateUser }: { user: User, onUpdateUser: (u: 
     // Logic from requirements
     if (user.withdrawalCount === 0) {
       // First time rules
-      if (amt < 10) {
-        return alert("First withdrawal minimum is ৳10");
+      if (amt < 20) {
+        return alert("First withdrawal minimum is ৳20");
       }
     } else {
       // Subsequent rules
@@ -485,13 +564,13 @@ const WithdrawScreen = ({ user, onUpdateUser }: { user: User, onUpdateUser: (u: 
         <Input 
           label="Amount" 
           type="number" 
-          placeholder="Min ৳10 (1st time)"
+          placeholder="Min ৳20 (1st time)"
           value={amount}
           onChange={(e: any) => setAmount(e.target.value)}
         />
 
         <div className="bg-slate-900/50 p-4 rounded-xl mb-6 text-xs text-slate-400 space-y-1">
-          <p>• First withdrawal min: ৳10</p>
+          <p>• First withdrawal min: ৳20</p>
           <p>• Subsequent: Min ৳500 + 3 Referrals</p>
         </div>
 
@@ -517,13 +596,13 @@ const ProfileScreen = ({ user, onLogout, onAdminAccess }: any) => {
 
     if (!referrer) return alert("Invalid referral code");
 
-    // Bonus Logic: User gets 5, Referrer gets credit
+    // Bonus Logic: Referrer gets 20
     const updatedUsers = users.map(u => {
       if (u.id === user.id) {
-        return { ...u, balance: u.balance + 5, referredBy: referralInput };
+        return { ...u, referredBy: referralInput };
       }
       if (u.id === referrer.id) {
-        return { ...u, referralCount: u.referralCount + 1 };
+        return { ...u, referralCount: u.referralCount + 1, balance: u.balance + 10 };
       }
       return u;
     });
@@ -560,7 +639,7 @@ const ProfileScreen = ({ user, onLogout, onAdminAccess }: any) => {
 
       <div className="glass-card p-6 rounded-3xl border-dashed border-2 border-slate-700 text-center">
         <h3 className="text-sm font-bold mb-3 text-slate-300">Invite Friends & Earn</h3>
-        <p className="text-xs text-slate-400 mb-4">Share your link to earn rewards</p>
+        <p className="text-xs text-slate-400 mb-4">Share your link. You get <span className="text-cyan-400 font-bold">৳10</span> per referral!</p>
         <div className="flex flex-col gap-2">
           <div className="bg-black/40 p-3 rounded-lg text-xs text-slate-400 break-all font-mono border border-slate-800">
             {`${window.location.origin}?ref=${user.referralCode}`}
@@ -577,9 +656,72 @@ const ProfileScreen = ({ user, onLogout, onAdminAccess }: any) => {
             <Copy className="w-4 h-4" /> Copy Referral Link
           </Button>
         </div>
+
+        <div className="grid grid-cols-4 gap-2 mt-3">
+          <button 
+            onClick={() => {
+              const link = `${window.location.origin}?ref=${user.referralCode}`;
+              const text = `নতুন ইনকাম সাইট! সাইন আপ করলেই ১০ টাকা ফ্রি। কোনো ইনভেস্টমেন্ট লাগে না। লিংক:`;
+              window.open(`https://wa.me/?text=${encodeURIComponent(text)} ${encodeURIComponent(link)}`, '_blank');
+            }}
+            className="p-3 bg-[#25D366]/20 text-[#25D366] rounded-xl flex justify-center items-center hover:bg-[#25D366]/30 transition-colors"
+          >
+            <MessageCircle className="w-5 h-5" />
+          </button>
+          <button 
+            onClick={() => {
+              const link = `${window.location.origin}?ref=${user.referralCode}`;
+              window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(link)}`, '_blank');
+            }}
+            className="p-3 bg-[#1877F2]/20 text-[#1877F2] rounded-xl flex justify-center items-center hover:bg-[#1877F2]/30 transition-colors"
+          >
+            <Facebook className="w-5 h-5" />
+          </button>
+          <button 
+            onClick={() => {
+              const link = `${window.location.origin}?ref=${user.referralCode}`;
+              const text = `নতুন ইনকাম সাইট! সাইন আপ করলেই ১০ টাকা ফ্রি। কোনো ইনভেস্টমেন্ট লাগে না। লিংক:`;
+              window.open(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`, '_blank');
+            }}
+            className="p-3 bg-[#229ED9]/20 text-[#229ED9] rounded-xl flex justify-center items-center hover:bg-[#229ED9]/30 transition-colors"
+          >
+            <Send className="w-5 h-5" />
+          </button>
+          <button 
+            onClick={() => {
+              const link = `${window.location.origin}?ref=${user.referralCode}`;
+              const text = `নতুন ইনকাম সাইট! সাইন আপ করলেই ১০ টাকা ফ্রি। কোনো ইনভেস্টমেন্ট লাগে না। লিংক:`;
+              if (navigator.share) {
+                navigator.share({ title: 'Ad Bank', text: text, url: link });
+              } else {
+                navigator.clipboard.writeText(link);
+                alert('Link copied!');
+              }
+            }}
+            className="p-3 bg-slate-700/50 text-slate-300 rounded-xl flex justify-center items-center hover:bg-slate-700 transition-colors"
+          >
+            <Share2 className="w-5 h-5" />
+          </button>
+        </div>
       </div>
       
       <AdPlaceholder />
+
+      <div className="flex justify-center">
+        <Button 
+          onClick={onAdminAccess} 
+          variant="secondary" 
+          className="text-xs py-2 px-6 opacity-50 hover:opacity-100"
+        >
+          <Lock className="w-4 h-4" />
+        </Button>
+      </div>
+
+      <div className="flex justify-center gap-4 text-xs text-slate-500 pb-4">
+        <button onClick={() => (window as any).setTab('privacy')} className="hover:text-cyan-400">Privacy Policy</button>
+        <span>•</span>
+        <button onClick={() => (window as any).setTab('terms')} className="hover:text-cyan-400">Terms of Service</button>
+      </div>
     </div>
   );
 };
@@ -667,7 +809,10 @@ const AdminScreen = ({ user, onExit }: any) => {
       </div>
 
       <div className="space-y-4">
-        <h3 className="font-bold text-sm text-slate-500 uppercase">User Management</h3>
+        <div className="flex justify-between items-center">
+          <h3 className="font-bold text-sm text-slate-500 uppercase">User Management</h3>
+          <span className="text-xs bg-slate-800 px-2 py-1 rounded text-cyan-400">Total: {users.length}</span>
+        </div>
         {users.map(u => (
           <div key={u.id} className="glass-card p-4 rounded-xl flex justify-between items-center">
             <div>
