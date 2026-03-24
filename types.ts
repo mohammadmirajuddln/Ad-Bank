@@ -28,4 +28,4 @@ export interface ScratchCard {
   color: string;
 }
 
-export const ADMIN_PASSWORD = 'mdmiraj%৳';
+export const ADMIN_PASSWORD = 'mdmiraj%';
